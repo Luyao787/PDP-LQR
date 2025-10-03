@@ -67,9 +67,20 @@ struct LQRModel {
     int N; // number of intervals
 
     std::vector<Knotpoint> knotpoints;
+
+    LQRModel(int n, int m, int horizon) : n(n), m(m), N(horizon) {
+        if (N < 1) {
+            throw std::runtime_error("Horizon must be at least 1.");
+        }
+        knotpoints.reserve(N + 1);
+    }
  
-    // Knotpoint& get_knotpoint(int k) { return knotpoints[k]; }
-    // const Knotpoint& get_knotpoint(int k) const { return knotpoints[k]; }
+    Knotpoint& get_knotpoint(int k) { return knotpoints[k]; }
+    const Knotpoint& get_knotpoint(int k) const { return knotpoints[k]; }
+
+    void add_knotpoint(int n, int m, int nc, int time_step, bool is_terminal_stage = false) {
+        knotpoints.emplace_back(n, m, nc, time_step, is_terminal_stage);
+    }
 };
 
 } // namespace lqr
