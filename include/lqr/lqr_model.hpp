@@ -59,6 +59,8 @@ struct Knotpoint {
             e_ub.setZero();
         }
     }
+
+    int get_constraint_dim() const { return n_con; }
 };
 
 struct LQRModel {

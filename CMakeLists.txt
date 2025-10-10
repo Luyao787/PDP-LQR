@@ -30,14 +30,14 @@ add_library(pdpLQR::pdpLQR ALIAS pdpLQR)
 # Set target properties
 target_include_directories(pdpLQR 
     INTERFACE 
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(pdpLQR 
     INTERFACE 
-        Eigen3::Eigen
-        OpenMP::OpenMP_CXX
+    Eigen3::Eigen
+    OpenMP::OpenMP_CXX
 )
 
 target_compile_features(pdpLQR INTERFACE cxx_std_17)
@@ -70,7 +70,7 @@ install(
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Install export set
+# Export targets for find_package() support
 install(
     EXPORT pdpLQRTargets
     FILE pdpLQRTargets.cmake
