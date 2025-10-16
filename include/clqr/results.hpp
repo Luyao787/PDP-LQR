@@ -2,8 +2,8 @@
 
 #include <vector>
 #include <cassert>
-#include "lqr/typedefs.hpp"
-#include "lqr/status.hpp"
+#include "clqr/typedefs.hpp"
+#include "clqr/status.hpp"
 
 namespace lqr {
 
@@ -26,7 +26,7 @@ struct LQRResults
 
     scalar optimal_LQR_cost = LQR_INFTY;
 
-    void reset(int nx, int nu, std::vector<int> ncs, int horizon)
+    void reset(int nx, int nu, const std::vector<int>& ncs, int horizon)
     {
         assert(ncs.size() == horizon + 1);
 
@@ -42,7 +42,7 @@ struct LQRResults
             lambdas[k].resize(nx);
             lambdas[k].setZero();
             ys[k].resize(ncs[k]);
-            ys[k].setZero();
+            ys[k].setZero();    
         }
         xs[horizon].resize(nx);
         xs[horizon].setZero();

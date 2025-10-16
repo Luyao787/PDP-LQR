@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lqr/typedefs.hpp"
+#include "clqr/typedefs.hpp"
 
 namespace lqr {
 
@@ -23,11 +23,11 @@ struct LQRSettings
     scalar rho_min = 1e-6;
     scalar rho_max = 1e+3;
 
-    // Load settings from config file
-    static LQRSettings fromConfig(const std::string& config_file_path = "config/default_config.json");
+    // // Load settings from config file
+    // static LQRSettings fromConfig(const std::string& config_file_path = "config/default_config.json");
     
-    // Load settings from ConfigManager
-    static LQRSettings fromConfigManager();
+    // // Load settings from ConfigManager
+    // static LQRSettings fromConfigManager();
 };
 
 } // namespace lqr

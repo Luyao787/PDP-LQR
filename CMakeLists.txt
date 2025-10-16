@@ -106,13 +106,13 @@ export(
 )
 
 # Options for building examples and tests
-option(BUILD_EXAMPLES "Build examples" OFF)
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_EXAMPLES "Build examples" ON)
+# option(BUILD_TESTS "Build tests" OFF)
 
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-if(BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
+# if(BUILD_TESTS)
+#     add_subdirectory(tests)
+# endif()

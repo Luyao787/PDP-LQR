@@ -1,11 +1,11 @@
 #pragma once
 
 #include <vector>
-#include "lqr/typedefs.hpp"
+#include "clqr/typedefs.hpp"
 
 namespace lqr {
 
-struct Knotpoint {
+struct Node {
     int n, m;  // n: state dimension, m: control dimension
     int n_con; // number of constraints
 
@@ -26,7 +26,7 @@ struct Knotpoint {
     bool is_terminal;
     int time_step;
 
-    Knotpoint(int state_dim, int control_dim, int n_constraints, int time_step, bool is_terminal_stage = false)
+    Node(int state_dim, int control_dim, int n_constraints, int time_step, bool is_terminal_stage = false)
         : n(state_dim), m(control_dim), n_con(n_constraints), is_terminal(is_terminal_stage), time_step(time_step)
     {
         if (is_terminal) {
@@ -68,20 +68,23 @@ struct LQRModel {
     int m; // control dimension
     int N; // number of intervals
 
-    std::vector<Knotpoint> knotpoints;
+    std::vector<int> ncs;
+    std::vector<Node> nodes;
 
     LQRModel(int n, int m, int horizon) : n(n), m(m), N(horizon) {
         if (N < 1) {
             throw std::runtime_error("Horizon must be at least 1.");
         }
-        knotpoints.reserve(N + 1);
+        ncs.resize(N + 1);
+        nodes.reserve(N + 1);
     }
- 
-    Knotpoint& get_knotpoint(int k) { return knotpoints[k]; }
-    const Knotpoint& get_knotpoint(int k) const { return knotpoints[k]; }
+    
+    Node& get_node(int k) { return nodes[k]; }
+    const Node& get_node(int k) const { return nodes[k]; }
 
-    void add_knotpoint(int n, int m, int nc, int time_step, bool is_terminal_stage = false) {
-        knotpoints.emplace_back(n, m, nc, time_step, is_terminal_stage);
+    void add_node(int n, int m, int nc, int time_step, bool is_terminal_stage = false) {
+        nodes.emplace_back(n, m, nc, time_step, is_terminal_stage);
+        ncs[time_step] = nc;
     }
 };
 

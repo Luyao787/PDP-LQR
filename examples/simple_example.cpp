@@ -88,8 +88,8 @@ int main() {
     for (int k = 0; k < N; ++k) {
         int nc = nu + nx;
         ncs[k] = nc;
-        lqr_model.add_knotpoint(nx, nu, nc, k);
-        auto& kpoint = lqr_model.knotpoints[k];
+        lqr_model.add_node(nx, nu, nc, k);
+        auto& kpoint = lqr_model.nodes[k];
 
         kpoint.E << B, A;
         kpoint.c = c;
@@ -111,8 +111,8 @@ int main() {
     }
     int nc = nx;
     ncs[N] = nc;
-    lqr_model.add_knotpoint(nx, nu, nc, N, true);
-    auto& kpoint = lqr_model.knotpoints[N];
+    lqr_model.add_node(nx, nu, nc, N, true);
+    auto& kpoint = lqr_model.nodes[N];
     kpoint.H = Q;
     kpoint.h = q;
     kpoint.D_con.setIdentity();
