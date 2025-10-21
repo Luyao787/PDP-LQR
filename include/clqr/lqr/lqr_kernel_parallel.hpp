@@ -48,12 +48,45 @@ struct ParallelLQRKernelData : public LQRKernelData
 
 struct CondensedLQRKernelData
 {
-    MatrixXs A, C, Q, P;
-    VectorXs c, q, p;
+    // MatrixXs A, C, Q, P;
+    // VectorXs c, q, p;
 
+    // MatrixXs PC, PA, D;
+    // Eigen::PartialPivLU<MatrixXs> lu_fact;
+    // VectorXs Pc, e;
+
+    // VectorXs xhat, uhat;
+
+    // CondensedLQRKernelData(int nx)
+    // {
+    //     A.resize(nx, nx);
+    //     C.resize(nx, nx);
+    //     Q.resize(nx, nx);
+    //     P.resize(nx, nx);
+    //     c.resize(nx);
+    //     q.resize(nx);
+    //     p.resize(nx);
+    //     PC.resize(nx, nx);
+    //     PA.resize(nx, nx);
+    //     D.resize(nx, nx);
+    //     Pc.resize(nx);
+    //     e.resize(nx);
+    //     xhat.resize(nx);
+    //     uhat.resize(nx);
+    // }
+    
+    // MatrixXs A, C, Q, P;
+    // VectorXs c, q, p;
+    MatrixXs A, C, P;
+    VectorXs c, p;
+
+    // MatrixXs PC, PA, D;
+    // Eigen::PartialPivLU<MatrixXs> lu_fact;
+    // VectorXs Pc, e;
     MatrixXs PC, PA, D;
     Eigen::PartialPivLU<MatrixXs> lu_fact;
-    VectorXs Pc, e;
+    VectorXs c_bar;
+
 
     VectorXs xhat, uhat;
 
@@ -61,19 +94,19 @@ struct CondensedLQRKernelData
     {
         A.resize(nx, nx);
         C.resize(nx, nx);
-        Q.resize(nx, nx);
+        // Q.resize(nx, nx);
         P.resize(nx, nx);
         c.resize(nx);
-        q.resize(nx);
+        // q.resize(nx);
         p.resize(nx);
         PC.resize(nx, nx);
         PA.resize(nx, nx);
         D.resize(nx, nx);
-        Pc.resize(nx);
-        e.resize(nx);
+        c_bar.resize(nx);
+        // e.resize(nx);
         xhat.resize(nx);
         uhat.resize(nx);
-    } 
+    }
 };
 
 struct ParallelLQRKernel {

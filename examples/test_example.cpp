@@ -192,19 +192,30 @@ int main() {
     std::cout << "First input (LQRSolver):\n" << ws[0].head(nu).transpose() << std::endl;
     std::cout << "Final state (LQRSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
 
-    // LQRResults lqr_results;
-    // lqr_results.reset(nx, nu, ncs, N);
 
-    // LQRSettings lqr_settings;
-    // lqr_settings.max_iter = 1000;
+    // Initialize each vector element
+    for (int k = 0; k < N + 1; ++k) {
+        if (k < N) {
+            ws[k].resize(nx + nu);
+        } else {
+            ws[k].resize(nx);
+        }
+        ws[k].setZero();
+        ys[k].resize(lqr_model.ncs[k]);
+        ys[k].setZero();
+        zs[k].resize(lqr_model.ncs[k]);
+        zs[k].setZero();
+        rho_vecs[k].resize(lqr_model.ncs[k]);
+        rho_vecs[k].setConstant(rho);
+        inv_rho_vecs[k].resize(lqr_model.ncs[k]);
+        inv_rho_vecs[k].setConstant(1.0 / rho);
+    }
 
-    // OSCLQRSolver lqr_solver(lqr_model);
-    // lqr_solver.solve(x0, lqr_settings, lqr_results);
-
-    // std::cout << "Final state: " << lqr_results.xs[N].transpose() << std::endl;
-    // // Control inputs
-    // for (int k = 0; k < std::min(5, N); ++k) {
-    //     std::cout << "Control input at step " << k << ": " << lqr_results.us[k].transpose() << std::endl;
-    // }
+    LQRParallelSolver lqr_solver3(lqr_model, 2, true);
+    lqr_solver3.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    lqr_solver3.backward(rho_vecs);
+    lqr_solver3.forward(x0, ws);
+    std::cout << "First input (LQRParallelSolver):\n" << ws[0].head(nu).transpose() << std::endl;
+    std::cout << "Final state (LQRParallelSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
 
 }
