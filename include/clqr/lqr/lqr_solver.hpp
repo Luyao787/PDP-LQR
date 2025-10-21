@@ -48,7 +48,6 @@ void LQRSolver::update_problem_data(const std::vector<VectorXs>& ws,
         workspace_[k].H.diagonal().array() += sigma;
         workspace_[k].h = kpoint.h;
         workspace_[k].h.noalias() -= sigma * ws[k];
-
         if (kpoint.n_con > 0) {
             workspace_[k].g = zs[k];
             workspace_[k].g.noalias() -= inv_rho_vecs[k].cwiseProduct(ys[k]);

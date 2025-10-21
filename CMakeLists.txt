@@ -23,6 +23,20 @@ message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(OpenMP REQUIRED)
 
+# Find QDLDL
+find_path(QDLDL_INCLUDE_DIR qdldl/qdldl.h)
+find_library(QDLDL_LIBRARY NAMES qdldl)
+
+if(QDLDL_INCLUDE_DIR AND QDLDL_LIBRARY)
+    message(STATUS "Found QDLDL: ${QDLDL_LIBRARY}")
+    add_library(QDLDL::QDLDL UNKNOWN IMPORTED)
+    set_target_properties(QDLDL::QDLDL PROPERTIES
+        IMPORTED_LOCATION "${QDLDL_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${QDLDL_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "QDLDL not found. Please install QDLDL or set QDLDL_INCLUDE_DIR and QDLDL_LIBRARY")
+endif()
+
 # Create header-only library
 add_library(pdpLQR INTERFACE)
 add_library(pdpLQR::pdpLQR ALIAS pdpLQR)
@@ -38,6 +52,7 @@ target_link_libraries(pdpLQR
     INTERFACE 
     Eigen3::Eigen
     OpenMP::OpenMP_CXX
+    QDLDL::QDLDL
 )
 
 target_compile_features(pdpLQR INTERFACE cxx_std_17)

@@ -5,6 +5,7 @@
 #include "clqr/results.hpp"
 #include "clqr/settings.hpp"
 #include "clqr/osclqr_solver.hpp"
+#include "clqr/lqr/qdldl_solver.hpp"
 
 using namespace lqr;
 
@@ -88,7 +89,8 @@ int main() {
 
     std::vector<int> ncs(N + 1);
     for (int k = 0; k < N; ++k) {
-        int nc = nu + nx;
+        int nc = k > 0 ? nx + nu : nu;
+        // int nc = 0;
         ncs[k] = nc;
         lqr_model.add_node(nx, nu, nc, k);
         auto& kpoint = lqr_model.nodes[k];
@@ -104,14 +106,23 @@ int main() {
         kpoint.h.tail(nx) = q;
 
         kpoint.D_con.setZero();
-        kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
-        if (k > 0) {
+        // kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
+        // if (k > 0) {
+        //     kpoint.D_con.bottomRightCorner(nx, nx).setIdentity();
+        // }
+        if (k == 0) {
+            kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
+            kpoint.e_lb = u_min;
+            kpoint.e_ub = u_max;
+        } else {
+            kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
             kpoint.D_con.bottomRightCorner(nx, nx).setIdentity();
-        }
-        kpoint.e_lb << u_min, x_min;
-        kpoint.e_ub << u_max, x_max;          
+            kpoint.e_lb << u_min, x_min;
+            kpoint.e_ub << u_max, x_max;
+        }         
     }
     int nc = nx;
+    // int nc = 0;
     ncs[N] = nc;
     lqr_model.add_node(nx, nu, nc, N, true);
     auto& kpoint = lqr_model.nodes[N];
@@ -121,19 +132,79 @@ int main() {
     kpoint.e_lb = x_min;
     kpoint.e_ub = x_max;
 
-    LQRResults lqr_results;
-    lqr_results.reset(nx, nu, ncs, N);
+    std::vector<VectorXs> ws, ys, zs, rho_vecs, inv_rho_vecs;
+    scalar rho = 0.01;
+    scalar sigma = 1e-6;
+    ws.resize(N + 1);
+    ys.resize(N + 1);
+    zs.resize(N + 1);
+    rho_vecs.resize(N + 1);
+    inv_rho_vecs.resize(N + 1);
 
-    LQRSettings lqr_settings;
-    lqr_settings.max_iter = 1000;
-
-    OSCLQRSolver lqr_solver(lqr_model);
-    lqr_solver.solve(x0, lqr_settings, lqr_results);
-
-    std::cout << "Final state: " << lqr_results.xs[N].transpose() << std::endl;
-    // Control inputs
-    for (int k = 0; k < std::min(5, N); ++k) {
-        std::cout << "Control input at step " << k << ": " << lqr_results.us[k].transpose() << std::endl;
+    // Initialize each vector element
+    for (int k = 0; k < N + 1; ++k) {
+        if (k < N) {
+            ws[k].resize(nx + nu);
+        } else {
+            ws[k].resize(nx);
+        }
+        ws[k].setZero();
+        ys[k].resize(lqr_model.ncs[k]);
+        ys[k].setZero();
+        zs[k].resize(lqr_model.ncs[k]);
+        zs[k].setZero();
+        rho_vecs[k].resize(lqr_model.ncs[k]);
+        rho_vecs[k].setConstant(rho);
+        inv_rho_vecs[k].resize(lqr_model.ncs[k]);
+        inv_rho_vecs[k].setConstant(1.0 / rho);
     }
+
+    QDLDLSolver lqr_solver(lqr_model);
+    lqr_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    lqr_solver.backward(inv_rho_vecs);
+    lqr_solver.forward(x0, ws);
+    std::cout << "First input:\n" << ws[0].head(nu).transpose() << std::endl;
+    std::cout << "Final state:\n" << ws[N].tail(nx).transpose() << std::endl;
+
+
+    // Initialize each vector element
+    for (int k = 0; k < N + 1; ++k) {
+        if (k < N) {
+            ws[k].resize(nx + nu);
+        } else {
+            ws[k].resize(nx);
+        }
+        ws[k].setZero();
+        ys[k].resize(lqr_model.ncs[k]);
+        ys[k].setZero();
+        zs[k].resize(lqr_model.ncs[k]);
+        zs[k].setZero();
+        rho_vecs[k].resize(lqr_model.ncs[k]);
+        rho_vecs[k].setConstant(rho);
+        inv_rho_vecs[k].resize(lqr_model.ncs[k]);
+        inv_rho_vecs[k].setConstant(1.0 / rho);
+    }
+
+    LQRSolver lqr_solver2(lqr_model);
+    lqr_solver2.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    lqr_solver2.backward(rho_vecs);
+    lqr_solver2.forward(x0, ws);
+    std::cout << "First input (LQRSolver):\n" << ws[0].head(nu).transpose() << std::endl;
+    std::cout << "Final state (LQRSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
+
+    // LQRResults lqr_results;
+    // lqr_results.reset(nx, nu, ncs, N);
+
+    // LQRSettings lqr_settings;
+    // lqr_settings.max_iter = 1000;
+
+    // OSCLQRSolver lqr_solver(lqr_model);
+    // lqr_solver.solve(x0, lqr_settings, lqr_results);
+
+    // std::cout << "Final state: " << lqr_results.xs[N].transpose() << std::endl;
+    // // Control inputs
+    // for (int k = 0; k < std::min(5, N); ++k) {
+    //     std::cout << "Control input at step " << k << ": " << lqr_results.us[k].transpose() << std::endl;
+    // }
 
 }
