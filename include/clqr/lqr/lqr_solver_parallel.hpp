@@ -1,8 +1,10 @@
 #pragma once 
 
+#include <memory>
 #include "clqr/typedefs.hpp"
 #include "clqr/lqr_model.hpp"
 #include "clqr/lqr/lqr_kernel_parallel.hpp"
+#include "clqr/lqr/condensed_system.hpp"
 
 namespace lqr {
 
@@ -34,8 +36,11 @@ private:
     int num_segments_;
     std::vector<int> Nseg_;
     std::vector<int> idx_start_;
-    std::vector<CondensedLQRKernelData> condensed_workspace_;
+    // std::vector<CondensedLQRKernelData> condensed_workspace_;
     std::vector<ParallelLQRKernelData> segment_terminal_workspace_;
+
+    std::unique_ptr<CondensedSystemLUSolver> condensed_system_solver_;
+    // std::unique_ptr<CondensedSystemCholeskySolver> condensed_system_solver_;
 
 };
 
@@ -61,10 +66,12 @@ LQRParallelSolver::LQRParallelSolver(const LQRModel& model, int num_segments, bo
     }
     Nseg_[num_segments_ - 1] = model.N - idx_start_[num_segments_ - 1];
 
-    condensed_workspace_.reserve(num_segments_);
-    for (int i = 0; i < num_segments_; ++i) {
-        condensed_workspace_.emplace_back(model.n);
-    }
+    // condensed_workspace_.reserve(num_segments_);
+    // for (int i = 0; i < num_segments_; ++i) {
+    //     condensed_workspace_.emplace_back(model.n);
+    // }
+    condensed_system_solver_ = std::make_unique<CondensedSystemLUSolver>(model.n, num_segments_);
+    // condensed_system_solver_ = std::make_unique<CondensedSystemCholeskySolver>(model.n, num_segments_);
 
     segment_terminal_workspace_.reserve(num_segments_);
     for (int i = 0; i < num_segments_; ++i) {
@@ -110,7 +117,7 @@ void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) {
         int tid = omp_get_thread_num();
         reduction(tid, rho_vecs);
     }
-    consensus();
+    condensed_system_solver_->backward();
 }
 
 void LQRParallelSolver::backward_without_factorization(const std::vector<VectorXs>& rho_vecs) {
@@ -119,7 +126,6 @@ void LQRParallelSolver::backward_without_factorization(const std::vector<VectorX
         int tid = omp_get_thread_num();
         reduction_without_factorization(tid, rho_vecs);
     }
-    consensus_without_factorization();
 }
 
 void LQRParallelSolver::reduction(int thread_id, const std::vector<VectorXs>& rho_vecs) {
@@ -139,11 +145,18 @@ void LQRParallelSolver::reduction(int thread_id, const std::vector<VectorXs>& rh
     // condensed_workspace_[thread_id].A = workspace_[N0].F;
     // condensed_workspace_[thread_id].C = workspace_[N0].C;
     // condensed_workspace_[thread_id].c = workspace_[N0].f;
-    condensed_workspace_[thread_id].P = Lxx_N0 * Lxx_N0.transpose();
-    condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
-    condensed_workspace_[thread_id].A = workspace_[N0].F;
-    condensed_workspace_[thread_id].C = workspace_[N0].C;
-    condensed_workspace_[thread_id].c = workspace_[N0].f;
+    // condensed_workspace_[thread_id].P = Lxx_N0 * Lxx_N0.transpose();
+    // condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
+    // condensed_workspace_[thread_id].A = workspace_[N0].F;
+    // condensed_workspace_[thread_id].C = workspace_[N0].C;
+    // condensed_workspace_[thread_id].c = workspace_[N0].f;
+
+    condensed_system_solver_->update_segment_data(
+        Lxx_N0,
+        workspace_[N0].F,
+        workspace_[N0].C,
+        workspace_[N0].lp.tail(nx),
+        workspace_[N0].f, thread_id);
 }
 
 void LQRParallelSolver::reduction_without_factorization(int thread_id, const std::vector<VectorXs>& rho_vecs) {
@@ -165,8 +178,11 @@ void LQRParallelSolver::reduction_without_factorization(int thread_id, const std
     int nx = model_.n;
     // condensed_workspace_[thread_id].q = workspace_[N0].lp.tail(nx);
     // condensed_workspace_[thread_id].c = workspace_[N0].f;
-    condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
-    condensed_workspace_[thread_id].c = workspace_[N0].f;
+    // condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
+    // condensed_workspace_[thread_id].c = workspace_[N0].f;
+    condensed_system_solver_->update_segment_data(
+        workspace_[N0].lp.tail(nx),
+        workspace_[N0].f, thread_id);
 }
 
 // void LQRParallelSolver::consensus() {
@@ -225,87 +241,89 @@ void LQRParallelSolver::reduction_without_factorization(int thread_id, const std
 //     }    
 // }
 
-void LQRParallelSolver::consensus() {
+// void LQRParallelSolver::consensus() {
 
-    for (int i = num_segments_ - 2; i >= 0; --i) {
-        ConstMatrixRef P_next = condensed_workspace_[i+1].P;
-        ConstVectorRef p_next = condensed_workspace_[i+1].p;
+//     for (int i = num_segments_ - 2; i >= 0; --i) {
+//         ConstMatrixRef P_next = condensed_workspace_[i+1].P;
+//         ConstVectorRef p_next = condensed_workspace_[i+1].p;
 
-        ConstMatrixRef A_i = condensed_workspace_[i].A;
-        ConstMatrixRef C_i = condensed_workspace_[i].C;
-        ConstVectorRef c_i = condensed_workspace_[i].c;
-        MatrixRef P_i      = condensed_workspace_[i].P;
-        VectorRef p_i      = condensed_workspace_[i].p;
-        MatrixRef PC_i  = condensed_workspace_[i].PC;
-        MatrixRef PA_i     = condensed_workspace_[i].PA;
-        MatrixRef D_i      = condensed_workspace_[i].D;
-        VectorRef c_bar_i       = condensed_workspace_[i].c_bar;
+//         ConstMatrixRef A_i = condensed_workspace_[i].A;
+//         ConstMatrixRef C_i = condensed_workspace_[i].C;
+//         ConstVectorRef c_i = condensed_workspace_[i].c;
+//         MatrixRef P_i      = condensed_workspace_[i].P;
+//         VectorRef p_i      = condensed_workspace_[i].p;
+//         MatrixRef PC_i  = condensed_workspace_[i].PC;
+//         MatrixRef PA_i     = condensed_workspace_[i].PA;
+//         MatrixRef D_i      = condensed_workspace_[i].D;
+//         VectorRef c_bar_i       = condensed_workspace_[i].c_bar;
 
-        PC_i.noalias() = C_i * P_next;
-        PC_i.diagonal().array() += 1.0;
-        PA_i.noalias() = P_next * A_i; 
+//         PC_i.noalias() = C_i * P_next;
+//         PC_i.diagonal().array() += 1.0;
+//         PA_i.noalias() = P_next * A_i; 
 
-        condensed_workspace_[i].lu_fact.compute(PC_i);
-        D_i = condensed_workspace_[i].lu_fact.solve(A_i);
-        // P_i = Q_i;
-        P_i.noalias() += D_i.transpose() * PA_i;
+//         condensed_workspace_[i].lu_fact.compute(PC_i);
+//         D_i = condensed_workspace_[i].lu_fact.solve(A_i);
+//         // P_i = Q_i;
+//         P_i.noalias() += D_i.transpose() * PA_i;
 
-        // Pc = p_next;
-        // Pc.noalias() += P_next * c_i;
-        // p_i = q_i;
-        // p_i.noalias() += D_i.transpose() * Pc;
-        c_bar_i = p_next;
-        c_bar_i.noalias() += P_next * c_i;
-        p_i.noalias() += D_i.transpose() * c_bar_i;        
+//         // Pc = p_next;
+//         // Pc.noalias() += P_next * c_i;
+//         // p_i = q_i;
+//         // p_i.noalias() += D_i.transpose() * Pc;
+//         c_bar_i = p_next;
+//         c_bar_i.noalias() += P_next * c_i;
+//         p_i.noalias() += D_i.transpose() * c_bar_i;        
    
-    }
-}
+//     }
+// }
 
-void LQRParallelSolver::consensus_without_factorization() {
-    for (int i = num_segments_ - 2; i >= 0; --i) {
-        ConstMatrixRef P_next = condensed_workspace_[i+1].P;
-        ConstVectorRef p_next = condensed_workspace_[i+1].p;
+// void LQRParallelSolver::consensus_without_factorization() {
+//     for (int i = num_segments_ - 2; i >= 0; --i) {
+//         ConstMatrixRef P_next = condensed_workspace_[i+1].P;
+//         ConstVectorRef p_next = condensed_workspace_[i+1].p;
 
-        ConstVectorRef c_i = condensed_workspace_[i].c;
-        // ConstVectorRef q_i = condensed_workspace_[i].q;
-        VectorRef p_i      = condensed_workspace_[i].p;
-        MatrixRef D_i      = condensed_workspace_[i].D;
-        VectorRef c_bar_i       = condensed_workspace_[i].c_bar;
+//         ConstVectorRef c_i = condensed_workspace_[i].c;
+//         // ConstVectorRef q_i = condensed_workspace_[i].q;
+//         VectorRef p_i      = condensed_workspace_[i].p;
+//         MatrixRef D_i      = condensed_workspace_[i].D;
+//         VectorRef c_bar_i       = condensed_workspace_[i].c_bar;
 
-        // Pc = p_next;
-        // Pc.noalias() += P_next * c_i;
-        // p_i = q_i;
-        // p_i.noalias() += D_i.transpose() * Pc;
-        c_bar_i = p_next;
-        c_bar_i.noalias() += P_next * c_i;
-        p_i.noalias() += D_i.transpose() * c_bar_i;
-    }    
-}
+//         // Pc = p_next;
+//         // Pc.noalias() += P_next * c_i;
+//         // p_i = q_i;
+//         // p_i.noalias() += D_i.transpose() * Pc;
+//         c_bar_i = p_next;
+//         c_bar_i.noalias() += P_next * c_i;
+//         p_i.noalias() += D_i.transpose() * c_bar_i;
+//     }    
+// }
 
 void LQRParallelSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
-    condensed_workspace_[0].xhat = x0;
-    for (int i = 0; i < num_segments_ - 1; ++i) {
-        ConstMatrixRef P_next = condensed_workspace_[i + 1].P;
-        ConstVectorRef p_next = condensed_workspace_[i + 1].p;
-        ConstMatrixRef A_i    = condensed_workspace_[i].A;
-        ConstMatrixRef C_i    = condensed_workspace_[i].C;
-        VectorRef c_i         = condensed_workspace_[i].c;
-        // VectorRef e_i         = condensed_workspace_[i].e;
+    // condensed_workspace_[0].xhat = x0;
+    // for (int i = 0; i < num_segments_ - 1; ++i) {
+    //     ConstMatrixRef P_next = condensed_workspace_[i + 1].P;
+    //     ConstVectorRef p_next = condensed_workspace_[i + 1].p;
+    //     ConstMatrixRef A_i    = condensed_workspace_[i].A;
+    //     ConstMatrixRef C_i    = condensed_workspace_[i].C;
+    //     VectorRef c_i         = condensed_workspace_[i].c;
+    //     // VectorRef e_i         = condensed_workspace_[i].e;
         
-        auto& xhat      = condensed_workspace_[i].xhat;
-        auto& uhat      = condensed_workspace_[i].uhat;
-        auto& xhat_next = condensed_workspace_[i + 1].xhat;
-        // e_i = c_i;
-        // e_i.noalias() += A_i * xhat;
-        // e_i.noalias() -= C_i * p_next;
-        c_i.noalias() += A_i * xhat;
-        c_i.noalias() -= C_i * p_next;
+    //     auto& xhat      = condensed_workspace_[i].xhat;
+    //     auto& uhat      = condensed_workspace_[i].uhat;
+    //     auto& xhat_next = condensed_workspace_[i + 1].xhat;
+    //     // e_i = c_i;
+    //     // e_i.noalias() += A_i * xhat;
+    //     // e_i.noalias() -= C_i * p_next;
+    //     c_i.noalias() += A_i * xhat;
+    //     c_i.noalias() -= C_i * p_next;
 
-        // xhat_next = condensed_workspace_[i].lu_fact.solve(e_i);
-        xhat_next = condensed_workspace_[i].lu_fact.solve(c_i);
-        uhat = p_next;
-        uhat.noalias() += P_next * xhat_next;
-    }
+    //     // xhat_next = condensed_workspace_[i].lu_fact.solve(e_i);
+    //     xhat_next = condensed_workspace_[i].lu_fact.solve(c_i);
+    //     uhat = p_next;
+    //     uhat.noalias() += P_next * xhat_next;
+    // }
+
+    condensed_system_solver_->forward(x0);
 
     #pragma omp parallel num_threads(num_segments_) 
     {
@@ -317,14 +335,15 @@ void LQRParallelSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
         if (is_last_segment) {
             workspace_[N1].lp = segment_terminal_workspace_[tid].lp; // TODO improve efficiency
         }
-        ws[N0].tail(model_.n) = condensed_workspace_[tid].xhat;
+        ws[N0].tail(model_.n) = condensed_system_solver_->get_xhat(tid);
+        const auto& uhat = condensed_system_solver_->get_uhat(tid);
         for (int k = N0; k < N1; ++k) {
             ParallelLQRKernel::forward_step(
-                model_.nodes[k], 
+                model_.nodes[k],
+                uhat,
                 workspace_[k], 
                 ws[k],
                 ws[k + 1],
-                condensed_workspace_[tid], 
                 is_last_segment);
         }
         if (tid < num_segments_ - 1) {
