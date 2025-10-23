@@ -1,5 +1,6 @@
 #pragma once 
 
+#include <iostream>
 #include <memory>
 #include "clqr/typedefs.hpp"
 #include "clqr/lqr_model.hpp"
@@ -23,7 +24,7 @@ public:
 
     void backward(const std::vector<VectorXs>& rho_vecs);
     void backward_without_factorization(const std::vector<VectorXs>& rho_vecs);
-    void reduction(int thread_id, const std::vector<VectorXs>& rho_vecs);
+    void reduction(int thread_id, const std::vector<VectorXs>& rho_vecs, int N0, int N1, bool is_last_segment);
     void reduction_without_factorization(int thread_id, const std::vector<VectorXs>& rho_vecs);
     void consensus();
     void consensus_without_factorization();
@@ -63,8 +64,11 @@ LQRParallelSolver::LQRParallelSolver(const LQRModel& model, int num_segments, bo
      for (int i = 0; i < num_segments_ - 1; ++i) {
         Nseg_[i] = int(model.N / (scale + num_segments_ - 1));
         idx_start_[i + 1] = idx_start_[i] + Nseg_[i];
+        std::cout << "Segment " << i << ": Start index = " << idx_start_[i] << ", Length = " << Nseg_[i] << std::endl;
     }
     Nseg_[num_segments_ - 1] = model.N - idx_start_[num_segments_ - 1];
+    std::cout << "Segment " << num_segments_ - 1 << ": Start index = " << idx_start_[num_segments_ - 1] 
+              << ", Length = " << Nseg_[num_segments_ - 1] << std::endl;
 
     // condensed_workspace_.reserve(num_segments_);
     // for (int i = 0; i < num_segments_; ++i) {
@@ -111,12 +115,30 @@ void LQRParallelSolver::update_problem_data(const std::vector<VectorXs>& ws,
     }
 }
 
-void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) {
+void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) { 
     #pragma omp parallel num_threads(num_segments_) 
     {
         int tid = omp_get_thread_num();
-        reduction(tid, rho_vecs);
+        int N0 = idx_start_[tid];
+        int N1 = N0 + Nseg_[tid];
+        bool is_last_segment = (tid == num_segments_ - 1);
+        reduction(tid, rho_vecs, N0, N1, is_last_segment);
+
+        #pragma omp barrier
+
+        ParallelLQRKernel::step_with_factorization(
+        model_.nodes[N0], rho_vecs[N0], workspace_[N0 + 1], workspace_[N0], is_last_segment);
+            
+        int nx = model_.n;
+        ConstMatrixRef Lxx_N0 = workspace_[N0].L.bottomRightCorner(nx, nx);
+        condensed_system_solver_->update_segment_data(
+            Lxx_N0,
+            workspace_[N0].F,
+            workspace_[N0].C,
+            workspace_[N0].lp.tail(nx),
+            workspace_[N0].f, tid);
     }
+    
     condensed_system_solver_->backward();
 }
 
@@ -128,35 +150,15 @@ void LQRParallelSolver::backward_without_factorization(const std::vector<VectorX
     }
 }
 
-void LQRParallelSolver::reduction(int thread_id, const std::vector<VectorXs>& rho_vecs) {
-    int N0 = idx_start_[thread_id];
-    int N1 = N0 + Nseg_[thread_id];
-    bool is_last_segment = (thread_id == num_segments_ - 1);
-
+void LQRParallelSolver::reduction(int thread_id, 
+                                  const std::vector<VectorXs>& rho_vecs,
+                                  int N0, int N1, 
+                                  bool is_last_segment) {
     ParallelLQRKernel::terminal_step_with_factorization(model_.nodes[N1], rho_vecs[N1], workspace_[N1], is_last_segment);
-    for (int k = N1 - 1; k >= N0; --k) {
+    for (int k = N1 - 1; k >= N0 + 1; --k) {
         ParallelLQRKernel::step_with_factorization(
             model_.nodes[k], rho_vecs[k], workspace_[k + 1], workspace_[k], is_last_segment);
     } 
-    int nx = model_.n;
-    ConstMatrixRef Lxx_N0 = workspace_[N0].L.bottomRightCorner(nx, nx);   
-    // condensed_workspace_[thread_id].Q = Lxx_N0 * Lxx_N0.transpose();
-    // condensed_workspace_[thread_id].q = workspace_[N0].lp.tail(nx);
-    // condensed_workspace_[thread_id].A = workspace_[N0].F;
-    // condensed_workspace_[thread_id].C = workspace_[N0].C;
-    // condensed_workspace_[thread_id].c = workspace_[N0].f;
-    // condensed_workspace_[thread_id].P = Lxx_N0 * Lxx_N0.transpose();
-    // condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
-    // condensed_workspace_[thread_id].A = workspace_[N0].F;
-    // condensed_workspace_[thread_id].C = workspace_[N0].C;
-    // condensed_workspace_[thread_id].c = workspace_[N0].f;
-
-    condensed_system_solver_->update_segment_data(
-        Lxx_N0,
-        workspace_[N0].F,
-        workspace_[N0].C,
-        workspace_[N0].lp.tail(nx),
-        workspace_[N0].f, thread_id);
 }
 
 void LQRParallelSolver::reduction_without_factorization(int thread_id, const std::vector<VectorXs>& rho_vecs) {
