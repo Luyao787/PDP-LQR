@@ -9,10 +9,18 @@
 
 namespace lqr {
 
+enum class CondensedSystemSolverType {
+    LU,
+    CHOLESKY
+};
+
 class LQRParallelSolver {
 public:
     LQRParallelSolver() = default;
-    LQRParallelSolver(const LQRModel& model, int num_segments, bool load_balancing=true);
+    LQRParallelSolver(const LQRModel& model, 
+                      int num_segments, 
+                      bool load_balancing=true, 
+                      CondensedSystemSolverType solver_type = CondensedSystemSolverType::LU);
     void clear_workspace() { 
         for (auto& data : workspace_) data.set_zero(); 
     }
@@ -24,7 +32,7 @@ public:
 
     void backward(const std::vector<VectorXs>& rho_vecs);
     void backward_without_factorization(const std::vector<VectorXs>& rho_vecs);
-    void reduction(int thread_id, const std::vector<VectorXs>& rho_vecs, int N0, int N1, bool is_last_segment);
+    void reduction(const std::vector<VectorXs>& rho_vecs, int N0, int N1, bool is_last_segment);
     void reduction_without_factorization(int thread_id, const std::vector<VectorXs>& rho_vecs);
     void consensus();
     void consensus_without_factorization();
@@ -40,12 +48,14 @@ private:
     // std::vector<CondensedLQRKernelData> condensed_workspace_;
     std::vector<ParallelLQRKernelData> segment_terminal_workspace_;
 
-    std::unique_ptr<CondensedSystemLUSolver> condensed_system_solver_;
-    // std::unique_ptr<CondensedSystemCholeskySolver> condensed_system_solver_;
+    std::unique_ptr<CondensedSystemSolverBase> condensed_system_solver_;
 
 };
 
-LQRParallelSolver::LQRParallelSolver(const LQRModel& model, int num_segments, bool load_balancing)
+LQRParallelSolver::LQRParallelSolver(const LQRModel& model, 
+                                     int num_segments, 
+                                     bool load_balancing,  
+                                     CondensedSystemSolverType solver_type)
     : model_(model), num_segments_(num_segments)
 {
     workspace_.reserve(model.N + 1);
@@ -70,13 +80,18 @@ LQRParallelSolver::LQRParallelSolver(const LQRModel& model, int num_segments, bo
     std::cout << "Segment " << num_segments_ - 1 << ": Start index = " << idx_start_[num_segments_ - 1] 
               << ", Length = " << Nseg_[num_segments_ - 1] << std::endl;
 
-    // condensed_workspace_.reserve(num_segments_);
-    // for (int i = 0; i < num_segments_; ++i) {
-    //     condensed_workspace_.emplace_back(model.n);
-    // }
-    condensed_system_solver_ = std::make_unique<CondensedSystemLUSolver>(model.n, num_segments_);
-    // condensed_system_solver_ = std::make_unique<CondensedSystemCholeskySolver>(model.n, num_segments_);
+    
+    switch (solver_type)
+    {
+    case CondensedSystemSolverType::LU:
+        condensed_system_solver_ = std::make_unique<CondensedSystemLUSolver>(model.n, num_segments_);
+        break;
+    case CondensedSystemSolverType::CHOLESKY:
+        condensed_system_solver_ = std::make_unique<CondensedSystemCholeskySolver>(model.n, num_segments_);
+        break;
 
+    }
+  
     segment_terminal_workspace_.reserve(num_segments_);
     for (int i = 0; i < num_segments_; ++i) {
         const auto& kpoint = model.nodes[ idx_start_[i] + Nseg_[i] ];
@@ -122,7 +137,7 @@ void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) {
         int N0 = idx_start_[tid];
         int N1 = N0 + Nseg_[tid];
         bool is_last_segment = (tid == num_segments_ - 1);
-        reduction(tid, rho_vecs, N0, N1, is_last_segment);
+        reduction(rho_vecs, N0, N1, is_last_segment);
 
         #pragma omp barrier
 
@@ -150,8 +165,7 @@ void LQRParallelSolver::backward_without_factorization(const std::vector<VectorX
     }
 }
 
-void LQRParallelSolver::reduction(int thread_id, 
-                                  const std::vector<VectorXs>& rho_vecs,
+void LQRParallelSolver::reduction(const std::vector<VectorXs>& rho_vecs,
                                   int N0, int N1, 
                                   bool is_last_segment) {
     ParallelLQRKernel::terminal_step_with_factorization(model_.nodes[N1], rho_vecs[N1], workspace_[N1], is_last_segment);

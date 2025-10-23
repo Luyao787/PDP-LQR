@@ -10,9 +10,23 @@ public:
     virtual ~CondensedSystemSolverBase() = default;
     
     virtual bool backward() = 0;
+    virtual void forward(const VectorXs& x0) = 0;
     
-    virtual void forward(const VectorXs& ) = 0;
-
+    // Overloaded update_segment_data methods
+    virtual void update_segment_data(const MatrixXs& Lxx,
+                                     const MatrixXs& A,
+                                     const MatrixXs& C,
+                                     const VectorXs& p,
+                                     const VectorXs& c, 
+                                     int segment_id) = 0;
+                                     
+    virtual void update_segment_data(const VectorXs& p,
+                                     const VectorXs& c, 
+                                     int segment_id) = 0;
+    
+    // Getter methods
+    virtual const VectorXs& get_xhat(int segment_id) = 0;
+    virtual const VectorXs& get_uhat(int segment_id) = 0;
 };
 
 class CondensedSystemLUSolver : public CondensedSystemSolverBase {
