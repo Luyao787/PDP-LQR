@@ -1,15 +1,55 @@
-#include <lqr/lqr.hpp>
 #include <iostream>
+#include <Eigen/Dense>
+#include "clqr/typedefs.hpp"
+#include "clqr/lqr_model.hpp"
+#include "clqr/results.hpp"
+#include "clqr/settings.hpp"
+#include "clqr/osclqr_solver.hpp"
+#include "clqr/lqr/qdldl_solver.hpp"
 
 using namespace lqr;
 
-int main() {
-    std::cout << "PDP-LQR Library Example" << std::endl;
-    
+void initialize_vectors(const LQRModel& model, 
+                        scalar rho,
+                        std::vector<VectorXs>& ws,
+                        std::vector<VectorXs>& ys,
+                        std::vector<VectorXs>& zs,
+                        std::vector<VectorXs>& rho_vecs,
+                        std::vector<VectorXs>& inv_rho_vecs) {
+    const int nx = model.n;
+    const int nu = model.m;
+    const int N  = model.N;
+
+    ws.resize(N + 1);
+    ys.resize(N + 1);
+    zs.resize(N + 1);
+    rho_vecs.resize(N + 1);
+    inv_rho_vecs.resize(N + 1);
+
+    for (int k = 0; k < N + 1; ++k) {
+        if (k < N) {
+            ws[k].resize(nx + nu);
+        } else {
+            ws[k].resize(nx);
+        }
+        // ws[k].resize(nx + nu);
+        ws[k].setZero();
+        ys[k].resize(model.ncs[k]);
+        ys[k].setZero();
+        zs[k].resize(model.ncs[k]);
+        zs[k].setZero();
+        rho_vecs[k].resize(model.ncs[k]);
+        rho_vecs[k].setConstant(rho);
+        inv_rho_vecs[k].resize(model.ncs[k]);
+        inv_rho_vecs[k].setConstant(1.0 / rho);
+    }
+}
+
+
+int main() {    
     /*
     * Example: A quadrotor example adapted from https://osqp.org/docs/release-0.6.3/examples/mpc.html
     */
-
     constexpr int nx = 12;
     constexpr int nu = 4;
     constexpr int N  = 10;
@@ -78,15 +118,12 @@ int main() {
     S.setZero();
     q = -x_ref.transpose() * Q;
     r.setZero();
-
-    LQRSettings lqr_settings;
-    lqr_settings.max_iter = 1000;
     
     LQRModel lqr_model(nx, nu, N);
 
     std::vector<int> ncs(N + 1);
     for (int k = 0; k < N; ++k) {
-        int nc = nu + nx;
+        int nc = k > 0 ? nx + nu : nu;
         ncs[k] = nc;
         lqr_model.add_node(nx, nu, nc, k);
         auto& kpoint = lqr_model.nodes[k];
@@ -102,12 +139,16 @@ int main() {
         kpoint.h.tail(nx) = q;
 
         kpoint.D_con.setZero();
-        kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
-        if (k > 0) {
+        if (k == 0) {
+            kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
+            kpoint.e_lb = u_min;
+            kpoint.e_ub = u_max;
+        } else {
+            kpoint.D_con.topLeftCorner(nu, nu).setIdentity();
             kpoint.D_con.bottomRightCorner(nx, nx).setIdentity();
-        }
-        kpoint.e_lb << u_min, x_min;
-        kpoint.e_ub << u_max, x_max;          
+            kpoint.e_lb << u_min, x_min;
+            kpoint.e_ub << u_max, x_max;
+        }         
     }
     int nc = nx;
     ncs[N] = nc;
@@ -119,21 +160,41 @@ int main() {
     kpoint.e_lb = x_min;
     kpoint.e_ub = x_max;
 
-    LQRResults lqr_results_serial, lqr_results_parallel;
-    lqr_results_serial.reset(nx, nu, ncs, N);
-    lqr_results_parallel.reset(nx, nu, ncs, N);
-
-    SerialCLQRSolver clqr_solver_serial(lqr_model);
-    ParallelCLQRSolver clqr_solver_parallel(lqr_model, 2); // Using 2 threads
-
-    clqr_solver_serial.solve(x0, lqr_settings, lqr_results_serial);
-    clqr_solver_parallel.solve(x0, lqr_settings, lqr_results_parallel);
-
-
-    std::cout << "Final state: " << lqr_results_serial.xs[N].transpose() << std::endl;
-    // Control inputs
-    for (int k = 0; k < std::min(5, N); ++k) {
-        std::cout << "Control input at step " << k << ": " << lqr_results_serial.us[k].transpose() << std::endl;
-    }
+    std::vector<VectorXs> ws, ys, zs, rho_vecs, inv_rho_vecs;
+    scalar rho = 0.01;
+    scalar sigma = 1e-6;
     
+    initialize_vectors(lqr_model, rho, ws, ys, zs, rho_vecs, inv_rho_vecs);
+    QDLDLSolver qdldl_solver(lqr_model);
+    qdldl_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    qdldl_solver.backward(inv_rho_vecs);
+    qdldl_solver.forward(x0, ws);
+    for (int i = 0; i < std::min(5, N); ++i) {
+        std::cout << "Input " << i << " (QDLDLSolver): " << ws[i].head(nu).transpose() << std::endl;
+    }
+    std::cout << "Final state (QDLDLSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
+
+
+    initialize_vectors(lqr_model, rho, ws, ys, zs, rho_vecs, inv_rho_vecs);
+    LQRSolver lqr_solver(lqr_model);
+    lqr_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    lqr_solver.backward(rho_vecs);
+    lqr_solver.forward(x0, ws);
+    for (int i = 0; i < std::min(5, N); ++i) {
+        std::cout << "Input " << i << " (LQRSolver): " << ws[i].head(nu).transpose() << std::endl;
+    }
+    std::cout << "Final state (LQRSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
+
+   
+    initialize_vectors(lqr_model, rho, ws, ys, zs, rho_vecs, inv_rho_vecs);
+    LQRParallelSolver lqr_parallel_solver(lqr_model, 4, true, CondensedSystemSolverType::CHOLESKY);
+    // LQRParallelSolver lqr_parallel_solver(lqr_model, 8, false, CondensedSystemSolverTypess::LU);
+    lqr_parallel_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
+    lqr_parallel_solver.backward(rho_vecs);
+    lqr_parallel_solver.forward(x0, ws);
+    for (int i = 0; i < std::min(5, N); ++i) {
+        std::cout << "Input " << i << " (LQRParallelSolver): " << ws[i].head(nu).transpose() << std::endl;
+    }
+    std::cout << "Final state (LQRParallelSolver):\n" << ws[N].tail(nx).transpose() << std::endl;
+
 }
