@@ -6,7 +6,7 @@
 #include <iostream>
 #include "clqr/lqr_model.hpp"
 #include "qdldl_typedefs.hpp"
-#include "utils.hpp"
+#include "kkt.hpp"
 
 namespace lqr
 {
@@ -130,23 +130,26 @@ void QDLDLSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
     const int N  = model_.N;
     /*
     ** x = [
-        u0, lambda1, y0, 
-        x1, u1, lambda2, y1,
-        ......
-        xN-1, uN-1, lambdaN, yN-1,
-        xN, yN
+        u0, 
+        x1, u1,
+        ...
+        xN,
+        y0,
+        lambda1, y1,
+        ...
+        lambdaN, yN
     ]
     */
     ws[0].tail(nx) = x0;
     ws[0].head(nu) = Eigen::Map<const VectorXs>(qdldl_data_->x.get(), nu);
-    int offset = nu + nx + model_.ncs[0];
+    int offset = nu;
     for (int k = 1; k < N; ++k) {
         // x
         ws[k].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
         // u
         ws[k].head(nu) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset + nx, nu);
         // 
-        offset += (2 * nx + nu + model_.ncs[k]);
+        offset += nx + nu;
     }
     // Terminal state
     ws[N].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
