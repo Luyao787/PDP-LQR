@@ -46,57 +46,6 @@ struct ParallelLQRKernelData : public LQRKernelData
     }
 };
 
-// struct CondensedLQRKernelData
-// {
-//     // MatrixXs A, C, Q, P;
-//     // VectorXs c, q, p;
-
-//     // MatrixXs PC, PA, D;
-//     // Eigen::PartialPivLU<MatrixXs> lu_fact;
-//     // VectorXs Pc, e;
-
-//     // VectorXs xhat, uhat;
-
-//     // CondensedLQRKernelData(int nx)
-//     // {
-//     //     A.resize(nx, nx);
-//     //     C.resize(nx, nx);
-//     //     Q.resize(nx, nx);
-//     //     P.resize(nx, nx);
-//     //     c.resize(nx);
-//     //     q.resize(nx);
-//     //     p.resize(nx);
-//     //     PC.resize(nx, nx);
-//     //     PA.resize(nx, nx);
-//     //     D.resize(nx, nx);
-//     //     Pc.resize(nx);
-//     //     e.resize(nx);
-//     //     xhat.resize(nx);
-//     //     uhat.resize(nx);
-//     // }
-    
-//     // MatrixXs A, C, Q, P;
-//     // VectorXs c, q, p;
-//     MatrixXs A, C, P;
-//     VectorXs c, p;
-
-//     // MatrixXs PC, PA, D;
-//     // Eigen::PartialPivLU<MatrixXs> lu_fact;
-//     // VectorXs Pc, e;
-//     MatrixXs PC, PA, D;
-//     Eigen::PartialPivLU<MatrixXs> lu_fact;
-//     VectorXs c_bar;
-
-//     VectorXs xhat, uhat;
-
-//     CondensedLQRKernelData(int nx)
-//         : A(nx, nx), C(nx, nx), P(nx, nx),
-//           c(nx), p(nx),
-//           PC(nx, nx), PA(nx, nx), D(nx, nx),
-//           c_bar(nx),
-//           xhat(nx), uhat(nx) { }
-// };
-
 struct ParallelLQRKernel {
     
     inline static 
@@ -220,14 +169,15 @@ struct ParallelLQRKernel {
     inline static
     void forward_step(const Node& kpoint, const VectorXs& uhat,
                       ParallelLQRKernelData& data,
-                      VectorXs& w, VectorXs& w_next, bool is_last_segment) {
+                      VectorXs& w, VectorXs& w_next, 
+                      bool is_last_segment, bool update_x_next) {
         if (is_last_segment) {
             LQRKernel::forward_step(kpoint,
                                     static_cast<LQRKernelData&>(data),
                                     w, w_next);
         } else {
-            int nx = kpoint.n;
-            int nu = kpoint.m;
+            const int nx = kpoint.n;
+            const int nu = kpoint.m;
             ConstMatrixRef G_k = data.G;
             ConstMatrixRef A_k = kpoint.E.topRightCorner(nx, nx);
             ConstMatrixRef B_k = kpoint.E.topLeftCorner(nx, nu);
@@ -239,7 +189,6 @@ struct ParallelLQRKernel {
             
             VectorRef x      = w.tail(nx);
             VectorRef u      = w.head(nu);
-            VectorRef x_next = w_next.tail(nx);
             // VectorRef uhat   = condensed_data.uhat;
 
             u.noalias()  = -lu_k;
@@ -247,10 +196,13 @@ struct ParallelLQRKernel {
             u.noalias() += G_k * uhat;
             Luu_k.triangularView<Eigen::Lower>().transpose().solveInPlace(u);
 
-            x_next.noalias()  = c_k;
-            x_next.noalias() += A_k * x;
-            x_next.noalias() += B_k * u;
-
+            if (update_x_next) {
+                VectorRef x_next = w_next.tail(nx);
+                x_next.noalias()  = c_k;
+                x_next.noalias() += A_k * x;
+                x_next.noalias() += B_k * u;
+            }
+        
             // // Dual variable update
             // ConstMatrixRef F_next = data_next.F;
             // ConstMatrixRef Lxx_next = data_next.L.bottomRightCorner(nx, nx);
