@@ -50,12 +50,12 @@ void assign_diagonal_matrix(Eigen::Index i0, Eigen::Index j0,
 }
 
 void assign_diagonal_matrix(Eigen::Index i0, Eigen::Index j0,
-                            scalar value, scalar size,
+                            scalar value, int size,
                             Eigen::SparseMatrix<scalar>& sparse_mat,
                             bool update) {
     assert(i0 + size <= sparse_mat.rows());
     assert(j0 + size <= sparse_mat.cols());
-    for (Eigen::Index i = 0; i < size; ++i) {
+    for (int i = 0; i < size; ++i) {
         if (update) {
             sparse_mat.coeffRef(i0 + i, j0 + i) = value;
         } else {
