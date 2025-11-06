@@ -23,8 +23,12 @@ public:
                       int num_segments, 
                       bool load_balancing=true, 
                       CondensedSystemSolverType solver_type = CondensedSystemSolverType::CHOLESKY);
-    void clear_workspace() { 
-        // for (auto& data : workspace_) data.set_zero(); 
+    void clear_workspace() {
+        for (auto& segment : workspace_) {
+            for (auto& data : segment.data) {
+                data.set_zero();
+            }
+        } 
     }
     void update_problem_data(const std::vector<VectorXs>& ws, 
                              const std::vector<VectorXs>& ys, 
@@ -63,28 +67,8 @@ LQRParallelSolver::LQRParallelSolver(const LQRModel& model,
                                      CondensedSystemSolverType solver_type)
     : model_(model), num_segments_(num_segments)
 {
-    // workspace_.reserve(model.N + 1);
-    // for (int k = 0; k < model.N; ++k) {
-    //     workspace_.emplace_back(model.n, model.m, model.nodes[k].n_con);
-    // }
-    // workspace_.emplace_back(model.n, 0, model.nodes.back().n_con, true);
-
-    // Nseg_.resize(num_segments_);
-    // idx_start_.resize(num_segments_);
-    // idx_start_[0] = 0;  // Initialize first index
-
-    scalar alpha = 1.55;
+    scalar alpha = 1.55; // TODO: remove magic number
     double scale = load_balancing ? alpha : 1.0;
-
-    // for (int i = 0; i < num_segments_ - 1; ++i) {
-    //     Nseg_[i] = int(model.N / (scale + num_segments_ - 1));
-    //     idx_start_[i + 1] = idx_start_[i] + Nseg_[i];
-    //     std::cout << "Segment " << i << ": Start index = " << idx_start_[i] << ", Length = " << Nseg_[i] << std::endl;
-    // }
-    // Nseg_[num_segments_ - 1] = model.N - idx_start_[num_segments_ - 1];
-    // std::cout << "Segment " << num_segments_ - 1 << ": Start index = " << idx_start_[num_segments_ - 1] 
-    //           << ", Length = " << Nseg_[num_segments_ - 1] << std::endl;
-
 
     workspace_.resize(num_segments_);
     for (int i = 0; i < num_segments_; ++i) {
@@ -157,11 +141,6 @@ void LQRParallelSolver::update_problem_data(const std::vector<VectorXs>& ws,
 
 void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) { 
     // ZoneScoped;
-    // #pragma omp parallel num_threads(num_segments_) 
-    // {
-    //     int tid = omp_get_thread_num();
-    //     reduction(tid, rho_vecs);
-    // }
     reduction(rho_vecs);
     condensed_system_solver_->backward();
 }
@@ -242,10 +221,6 @@ void LQRParallelSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
         const int N1 = N0 + workspace_[tid].Nseg;
         bool is_last_segment = (tid == num_segments_ - 1);
     
-        // if (is_last_segment) {
-        //     // workspace_[N1].lp = segment_terminal_workspace_[tid].lp; // TODO improve efficiency
-        //     workspace_[tid].data[N1 - N0].lp = segment_terminal_workspace_[tid].lp;
-        // }
         ws[N0].tail(model_.n) = condensed_system_solver_->get_xhat(tid);
         const auto& uhat = condensed_system_solver_->get_uhat(tid);
         
@@ -259,9 +234,6 @@ void LQRParallelSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
                 is_last_segment, 
                 (k < N1 - 1));
         }
-        // if (tid < num_segments_ - 1) {
-        //     // workspace_[N1].lambda = condensed_workspace_[tid].uhat; // TODO 
-        // }
     }   
 }
 
