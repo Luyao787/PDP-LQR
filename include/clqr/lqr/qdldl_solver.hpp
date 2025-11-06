@@ -140,19 +140,27 @@ void QDLDLSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
         lambdaN, yN
     ]
     */
+
+    // VectorXs x_perm = Eigen::Map<VectorXs>(qdldl_data_->x.get(), KKT_csc_->n);
+    // VectorXs x_ori = KKT_system_->Perm.transpose() * x_perm;
+
     ws[0].tail(nx) = x0;
     ws[0].head(nu) = Eigen::Map<const VectorXs>(qdldl_data_->x.get(), nu);
+    // ws[0].head(nu) = x_ori.head(nu);
     int offset = nu;
     for (int k = 1; k < N; ++k) {
         // x
         ws[k].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
+        // ws[k].tail(nx) = x_ori.segment(offset, nx);
         // u
         ws[k].head(nu) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset + nx, nu);
+        // ws[k].head(nu) = x_ori.segment(offset + nx, nu);
         // 
         offset += nx + nu;
     }
     // Terminal state
     ws[N].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
+    // ws[N].tail(nx) = x_ori.segment(offset, nx);
 }
 
 } // namespace lqr

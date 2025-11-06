@@ -17,7 +17,7 @@ struct CscMatrix {
 struct QDLDLData
 {
     // data for L and D factors
-    QDLDL_int    Ln;
+    QDLDL_int Ln;
     std::unique_ptr<QDLDL_int[]>   Lp;
     std::unique_ptr<QDLDL_int[]>   Li;
     std::unique_ptr<QDLDL_float[]> Lx;
@@ -27,7 +27,7 @@ struct QDLDLData
     // data for elim tree calculation
     std::unique_ptr<QDLDL_int[]> etree;
     std::unique_ptr<QDLDL_int[]> Lnz;
-    QDLDL_int  sumLnz;
+    QDLDL_int sumLnz;
 
     // working data for factorisation
     std::unique_ptr<QDLDL_int[]>   iwork;

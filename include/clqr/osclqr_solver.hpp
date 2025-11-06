@@ -10,6 +10,13 @@
 
 namespace lqr {
 
+// enum class LinearSystemSolverType {
+//     LQR,
+//     PDPLQR,
+//     QDLDL
+// };
+
+
 struct OSCLQRWorkspace {
     std::vector<VectorXs> rho_vecs;
     std::vector<VectorXs> inv_rho_vecs;
@@ -132,7 +139,7 @@ void OSCLQRSolver::update_dual_variables(scalar alpha) {
 
             kernel_data.y_tmp = workspace_.inv_rho_vecs[k].cwiseProduct(workspace_.ys[k]);
             workspace_.zs[k]  = kernel_data.z_tilde + kernel_data.y_tmp;
-            workspace_.zs[k]  = workspace_.zs[k].cwiseMax(kpoint.e_lb).cwiseMin(kpoint.e_ub);
+            workspace_.zs[k]  = workspace_.zs[k].cwiseMax(kpoint.e_lb).cwiseMin(kpoint.e_ub);   // projection 
             workspace_.ys[k] += workspace_.rho_vecs[k].cwiseProduct(kernel_data.z_tilde - workspace_.zs[k]);
         }
     }

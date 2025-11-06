@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Eigen/OrderingMethods>
 #include "utils.hpp"
 
 namespace lqr
@@ -483,6 +484,28 @@ public:
                 row_offset += ncs_[k];
             }
         }
+
+    // //    std::cout << "Original (upper part only):\n" << Eigen::MatrixXd(KKT_mat_) << "\n\n";
+
+    //     // Make it fully symmetric
+    //     KKT_mat_ = KKT_mat_ + Eigen::SparseMatrix<double>(KKT_mat_.transpose());
+    //     KKT_mat_.diagonal() *= 0.5; // prevent double-counting diagonal
+
+    //     // std::cout << "Symmetric full matrix:\n" << Eigen::MatrixXd(KKT_mat_) << "\n\n";
+
+    //     // Compute AMD ordering
+    //     Eigen::AMDOrdering<int> ordering;
+    //     // Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic, int> Perm;
+    //     ordering(KKT_mat_.selfadjointView<Eigen::Upper>(), Perm);
+
+    //     //  Apply permutation
+    //     KKT_mat_ = Perm * KKT_mat_ * Perm.transpose();
+
+    //     // std::cout << "Permuted matrix:\n" << Eigen::MatrixXd(KKT_mat_) << "\n";
+
+    //     KKT_mat_ = KKT_mat_.triangularView<Eigen::Upper>();
+
+    //     // std::cout << "Permuted matrix:\n" << Eigen::MatrixXd(KKT_mat_) << "\n";
     }
 
     void update_initial_stage_rhs(const LQRModel& model, const VectorXs& x0) {
@@ -578,6 +601,7 @@ public:
                 rhs_.segment(row_offset2, nc).noalias() -= inv_rho_vecs[N].cwiseProduct(ys[N]);
             }
         }
+        // rhs_ = Perm * rhs_;
     }
 
     std::unique_ptr<CscMatrix> get_KKT_csc_matrix() {
@@ -608,15 +632,14 @@ public:
     }
 
     const VectorXs& get_rhs() const { return rhs_; }
+
+public:
+    // Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic, int> Perm;
     
 private:
-    // std::vector<Eigen::Triplet<scalar>> triplets_;
-    // int max_num_triplets_;
     Eigen::SparseMatrix<scalar> KKT_mat_;
-    // Eigen::SparseMatrix<scalar> KKT_mat_triu_; 
     VectorXs rhs_;
-    std::vector<int> ncs_;
-    
+    std::vector<int> ncs_;    
     std::vector<MatrixXs> Hs_tmp_;
 };  
 

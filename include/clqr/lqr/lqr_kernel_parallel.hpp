@@ -128,6 +128,7 @@ struct ParallelLQRKernel {
             Luu.triangularView<Eigen::Lower>().solveInPlace(G); // nx nu^2
             F_tmp.noalias() = A + B * K; // 2 nx^2 nu
             F.noalias()     = F_next * F_tmp; // 2 nx^3
+            
             f_tmp.noalias() = c + B * d; 
             f.noalias()     = F_next * f_tmp + f_next;
             C.noalias()     = C_next + G.transpose() * G; // 2 nx^2 nu

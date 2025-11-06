@@ -34,7 +34,10 @@ public:
 
     void backward(const std::vector<VectorXs>& rho_vecs);
     void backward_without_factorization(const std::vector<VectorXs>& rho_vecs);
-    void reduction(int thread_id, const std::vector<VectorXs>& rho_vecs);
+    // void reduction(int thread_id, const std::vector<VectorXs>& rho_vecs);
+    void reduction(const std::vector<VectorXs>& rho_vecs);
+    void reduction_per_thread(int thread_id, const std::vector<VectorXs>& rho_vecs);
+
     void reduction_without_factorization(int thread_id, const std::vector<VectorXs>& rho_vecs);
     void consensus();
     void consensus_without_factorization();
@@ -111,12 +114,6 @@ LQRParallelSolver::LQRParallelSolver(const LQRModel& model,
     default:
         throw std::runtime_error("Unsupported CondensedSystemSolverType");
     }
-  
-    // segment_terminal_workspace_.reserve(num_segments_);
-    // for (int i = 0; i < num_segments_; ++i) {
-    //     const auto& kpoint = model.nodes[ idx_start_[i] + Nseg_[i] ];
-    //     segment_terminal_workspace_.emplace_back(kpoint.n, kpoint.m, kpoint.n_con, kpoint.is_terminal);
-    // }
 
     #pragma omp parallel num_threads(num_segments_)
     {
@@ -136,18 +133,6 @@ void LQRParallelSolver::update_problem_data(const std::vector<VectorXs>& ws,
                                             const std::vector<VectorXs>& zs,
                                             const std::vector<VectorXs>& inv_rho_vecs,
                                             const scalar sigma) {
-    // for (int k = 0; k < model_.N + 1; ++k) {
-    //     auto& kpoint = model_.nodes[k];
-    //     workspace_[k].H = kpoint.H;
-    //     workspace_[k].H.diagonal().array() += sigma;
-    //     workspace_[k].h = kpoint.h;
-    //     workspace_[k].h.noalias() -= sigma * ws[k];
-
-    //     if (kpoint.n_con > 0) {
-    //         workspace_[k].g = zs[k];
-    //         workspace_[k].g.noalias() -= inv_rho_vecs[k].cwiseProduct(ys[k]);
-    //     }
-    // }
     #pragma omp parallel num_threads(num_segments_) 
     {
         const int tid = omp_get_thread_num();
@@ -172,11 +157,12 @@ void LQRParallelSolver::update_problem_data(const std::vector<VectorXs>& ws,
 
 void LQRParallelSolver::backward(const std::vector<VectorXs>& rho_vecs) { 
     // ZoneScoped;
-    #pragma omp parallel num_threads(num_segments_) 
-    {
-        int tid = omp_get_thread_num();
-        reduction(tid, rho_vecs);
-    }
+    // #pragma omp parallel num_threads(num_segments_) 
+    // {
+    //     int tid = omp_get_thread_num();
+    //     reduction(tid, rho_vecs);
+    // }
+    reduction(rho_vecs);
     condensed_system_solver_->backward();
 }
 
@@ -188,22 +174,20 @@ void LQRParallelSolver::backward_without_factorization(const std::vector<VectorX
     }
 }
 
-void LQRParallelSolver::reduction(int thread_id, const std::vector<VectorXs>& rho_vecs) {
-    // ParallelLQRKernel::terminal_step_with_factorization(model_.nodes[N1], rho_vecs[N1], workspace_[N1], is_last_segment);
-    // for (int k = N1 - 1; k >= N0 + 1; --k) {
-    //     ParallelLQRKernel::step_with_factorization(
-    //         model_.nodes[k], rho_vecs[k], workspace_[k + 1], workspace_[k], is_last_segment);
-    // } 
+void LQRParallelSolver::reduction(const std::vector<VectorXs>& rho_vecs) {
+    #pragma omp parallel num_threads(num_segments_) 
+    {
+        int tid = omp_get_thread_num();
+        reduction_per_thread(tid, rho_vecs);
+    }
+}
 
+void LQRParallelSolver::reduction_per_thread(int thread_id, const std::vector<VectorXs>& rho_vecs) {
     const int N0 = workspace_[thread_id].idx_start;
     const int Nseg = workspace_[thread_id].Nseg;
     const int N1 = N0 + Nseg;
     bool is_last_segment = (thread_id == num_segments_ - 1);
     
-    // int N0 = idx_start_[thread_id];
-    // int N1 = N0 + Nseg_[thread_id];
-    // bool is_last_segment = (thread_id == num_segments_ - 1);
-
     ParallelLQRKernel::terminal_step_with_factorization(
         model_.nodes[N1], rho_vecs[N1], workspace_[thread_id].data.back(), is_last_segment);    
     for (int k = N1 - 1; k >= N0; --k) {
@@ -246,29 +230,6 @@ void LQRParallelSolver::reduction_without_factorization(int thread_id, const std
         workspace_[thread_id].data[0].f, 
         thread_id);
 }
-
-
-//     segment_terminal_workspace_[thread_id] = workspace_[N1];
-//     ParallelLQRKernel::terminal_step_without_factorization(
-//         model_.nodes[N1], rho_vecs[N1], segment_terminal_workspace_[thread_id], is_last_segment);
-//     if (N1 - 1 >= N0) {
-//         ParallelLQRKernel::step_without_factorization(
-//             model_.nodes[N1 - 1], rho_vecs[N1 - 1], segment_terminal_workspace_[thread_id], workspace_[N1 - 1], is_last_segment);
-//         for (int k = N1 - 2; k >= N0; --k) {
-//             ParallelLQRKernel::step_without_factorization(
-//                 model_.nodes[k], rho_vecs[k], workspace_[k + 1], workspace_[k], is_last_segment);
-//         }
-//     }
-//     int nx = model_.n;
-//     // condensed_workspace_[thread_id].q = workspace_[N0].lp.tail(nx);
-//     // condensed_workspace_[thread_id].c = workspace_[N0].f;
-//     // condensed_workspace_[thread_id].p = workspace_[N0].lp.tail(nx);
-//     // condensed_workspace_[thread_id].c = workspace_[N0].f;
-//     condensed_system_solver_->update_segment_data(
-//         workspace_[thread_id].data[0].lp.tail(nx), 
-//         workspace_[thread_id].data[0].f, 
-//         thread_id);
-// }
 
 void LQRParallelSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
     

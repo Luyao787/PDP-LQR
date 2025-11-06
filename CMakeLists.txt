@@ -10,16 +10,28 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Set build type to RelWithDebInfo by default
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
     if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
-        set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "" FORCE)
+        # set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "" FORCE)
+        set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
     endif()
 endif()
 message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
 # Set compiler flags
 list(APPEND compiler_flags -Wall -Wextra -Wconversion -Wpedantic)
+# list(APPEND compiler_flags -Wall -Wextra -Wconversion -Wpedantic -march=native -O2)
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
 # Find dependencies
+# include(FetchContent)
+# FetchContent_Declare (
+#     tracy
+#     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+#     GIT_TAG master
+#     GIT_SHALLOW TRUE
+#     GIT_PROGRESS TRUE
+# )
+# FetchContent_MakeAvailable (tracy)
+
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(OpenMP REQUIRED)
 
@@ -53,6 +65,7 @@ target_link_libraries(pdpLQR
     Eigen3::Eigen
     OpenMP::OpenMP_CXX
     QDLDL::QDLDL
+    # TracyClient
 )
 
 target_compile_features(pdpLQR INTERFACE cxx_std_17)
