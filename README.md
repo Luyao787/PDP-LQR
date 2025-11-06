@@ -1,10 +1,11 @@
 # PDP-LQR
 
-This repository contains the code for the paper titled "Parallel Dynamic Programming for Linear Quadratic Control".
+This repository contains the code for the paper titled "Parallel Dynamic Programming for Conic
+Linear Quadratic Control".
 
 ## Overview
 
-PDP-LQR is a library for solving Linear Quadratic Regulator (LQR) problems using parallel dynamic programming algorithms.
+PDP-LQR is a library for solving Linear Quadratic (LQ) problems using parallel dynamic programming algorithms.
 
 ## Features
 
