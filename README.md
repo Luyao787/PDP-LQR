@@ -5,9 +5,9 @@ Linear Quadratic Control".
 
 ## Overview
 
-PDP-LQR is a library for solving Linear Quadratic (LQ) problems using parallel dynamic programming algorithms.
+PDP-LQR is a library for solving Linear Quadratic (LQ) problems using parallel dynamic programming algorithms. The full code will be released soon.
 
-## Features
+<!-- ## Features -->
 
 ## Dependencies
 
@@ -47,44 +47,16 @@ Build and run examples:
 ```bash
 cmake -DBUILD_EXAMPLES=ON ..
 cmake --build .
-./examples/simple_example
+./examples/lqr_example
 ```
 
-## Testing
+<!-- ## Testing -->
 
-Build and run tests:
+<!-- Build and run tests: -->
 
 <!-- ```bash
 cmake -DBUILD_TESTS=ON ..
 make
 make test
-``` -->
-
-<!-- ## API Documentation
-
-### Core Classes
-
-- `lqr::LQRModel`: Represents the LQR problem (dynamics, costs, constraints)
-- `lqr::CLQRSolver`: Sequential constrained LQR solver
-- `lqr::CLQRParallelSolver`: Parallel constrained LQR solver
-
-### Key Types
-
-- `lqr::VectorXs`: Dynamic-sized vector (Eigen::VectorXd)
-- `lqr::MatrixXs`: Dynamic-sized matrix (Eigen::MatrixXd)
-- `lqr::scalar`: Floating-point type (double)
-
-For detailed API documentation, see the header files in `include/lqr/`. -->
-
-## License
-
-<!-- [Add your license information here] -->
-
-## Citation
-
-<!-- If you use this library in your research, please cite:
-
-```
-[Add citation information here]
 ``` -->
 

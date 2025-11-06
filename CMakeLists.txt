@@ -7,7 +7,6 @@ project(pdpLQR
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set build type to RelWithDebInfo by default
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
     if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
         # set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "" FORCE)
