@@ -22,7 +22,6 @@ public:
                              const std::vector<VectorXs>& inv_rho_vecs,
                              const scalar sigma);
     void backward(const std::vector<VectorXs>& inv_rho_vecs);
-    // void backward_without_factorization(const std::vector<VectorXs>& rho_vecs);
     void forward(const VectorXs& x0, std::vector<VectorXs>& ws);
 
 private:
@@ -40,7 +39,7 @@ QDLDLSolver::QDLDLSolver(const LQRModel& model)
     KKT_system_ = std::make_unique<KKTSystem>(model.n, model.m, model.N, model.ncs);
     scalar rho_dyn = 1e-6;
     scalar sigma   = 1e-6;
-    KKT_system_->form_KKT_system(model_, rho_dyn, sigma, false);
+    KKT_system_->form_KKT_matrix(model_, rho_dyn, sigma, false);
     KKT_csc_ = KKT_system_->get_KKT_csc_matrix();
     qdldl_data_ = create_workspace(*KKT_csc_);
 }
@@ -113,8 +112,7 @@ void QDLDLSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
     /*
     ** ws = [u0; x0; u1; x1; ...; uN-1; xN]
     */
-    KKT_system_->update_initial_stage_rhs(model_, x0);
-    // Use Eigen::Map to avoid element-by-element copy (both are double)
+    KKT_system_->update_rhs_initial_stage(model_, x0);
     Eigen::Map<VectorXs>(qdldl_data_->x.get(), KKT_csc_->n) = KKT_system_->get_rhs();
     QDLDL_solve(
         qdldl_data_->Ln,
@@ -140,27 +138,16 @@ void QDLDLSolver::forward(const VectorXs& x0, std::vector<VectorXs>& ws) {
         lambdaN, yN
     ]
     */
-
-    // VectorXs x_perm = Eigen::Map<VectorXs>(qdldl_data_->x.get(), KKT_csc_->n);
-    // VectorXs x_ori = KKT_system_->Perm.transpose() * x_perm;
-
     ws[0].tail(nx) = x0;
     ws[0].head(nu) = Eigen::Map<const VectorXs>(qdldl_data_->x.get(), nu);
-    // ws[0].head(nu) = x_ori.head(nu);
     int offset = nu;
     for (int k = 1; k < N; ++k) {
-        // x
-        ws[k].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
-        // ws[k].tail(nx) = x_ori.segment(offset, nx);
-        // u
-        ws[k].head(nu) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset + nx, nu);
-        // ws[k].head(nu) = x_ori.segment(offset + nx, nu);
-        // 
+        ws[k].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx); // state
+        ws[k].head(nu) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset + nx, nu); // control input
         offset += nx + nu;
     }
     // Terminal state
     ws[N].tail(nx) = Eigen::Map<VectorXs>(qdldl_data_->x.get() + offset, nx);
-    // ws[N].tail(nx) = x_ori.segment(offset, nx);
 }
 
 } // namespace lqr
