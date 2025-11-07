@@ -3,9 +3,8 @@
 #include <chrono>
 #include "clqr/typedefs.hpp"
 #include "clqr/lqr_model.hpp"
-#include "clqr/results.hpp"
-#include "clqr/settings.hpp"
-#include "clqr/osclqr_solver.hpp"
+#include "clqr/lqr/lqr_solver.hpp"
+#include "clqr/lqr/lqr_solver_parallel.hpp"
 #include "clqr/lqr/qdldl_solver.hpp"
 
 using namespace lqr;
@@ -53,7 +52,7 @@ int main() {
     */
     constexpr int nx = 12;
     constexpr int nu = 4;
-    constexpr int N  = 100;
+    constexpr int N  = 1;
 
     VectorXs x0(nx);
     VectorXs x_ref(nx);
@@ -173,8 +172,6 @@ int main() {
     
     initialize_vectors(lqr_model, rho, ws, ys, zs, rho_vecs, inv_rho_vecs);
     QDLDLSolver qdldl_solver(lqr_model);
-
-
 
     qdldl_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
 
