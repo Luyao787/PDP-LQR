@@ -11,10 +11,23 @@ PDP-LQR is a library for solving Linear Quadratic (LQ) problems using parallel d
 
 ## Dependencies
 
+- **CMake** (3.21 or later)
 - **C++17 compiler** 
 - **Eigen3** (3.3 or later)
+```bash
+sudo apt update
+sudo apt install libeigen3-dev
+```
 - **OpenMP** (for parallel algorithms)
-- **CMake** (3.21 or later)
+- **QDLDL** 
+```bash
+git clone https://github.com/osqp/qdldl.git
+cd qdldl
+mkdir build && cd build
+cmake ..
+cmake --build .
+cmake --install .
+```
 
 ## Installation
 
