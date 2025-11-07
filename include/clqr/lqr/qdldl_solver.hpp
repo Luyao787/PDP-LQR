@@ -64,7 +64,7 @@ std::unique_ptr<QDLDLData> QDLDLSolver::create_workspace(const CscMatrix& K)
     data->fwork = std::make_unique<QDLDL_float[]>(n);
     
     data->sumLnz = QDLDL_etree(n, K.p, K.i, data->iwork.get(), data->Lnz.get(), data->etree.get());
-            
+
     if (data->sumLnz < 0) {
         throw std::runtime_error("Error in QDLDL_etree");
     }

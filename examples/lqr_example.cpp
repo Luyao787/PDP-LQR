@@ -52,7 +52,7 @@ int main() {
     */
     constexpr int nx = 12;
     constexpr int nu = 4;
-    constexpr int N  = 1;
+    constexpr int N  = 100;
 
     VectorXs x0(nx);
     VectorXs x_ref(nx);
@@ -193,14 +193,13 @@ int main() {
     initialize_vectors(lqr_model, rho, ws, ys, zs, rho_vecs, inv_rho_vecs);
     LQRSolver lqr_solver(lqr_model);
     lqr_solver.update_problem_data(ws, ys, zs, inv_rho_vecs, sigma);
-    
+
     tic = std::chrono::high_resolution_clock::now();
 
     lqr_solver.backward(rho_vecs);
+    lqr_solver.forward(x0, ws);
 
     toc = std::chrono::high_resolution_clock::now();
-
-    lqr_solver.forward(x0, ws);
     elapsed = toc - tic;
     std::cout << "LQRSolver time: " << elapsed.count() * 1e3 << " ms" << std::endl;
     

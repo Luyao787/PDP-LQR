@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Eigen/OrderingMethods>
 #include "utils.hpp"
 
 namespace lqr
@@ -37,6 +36,10 @@ private:
     VectorXs rhs_;
     std::vector<int> ncs_;    
     std::vector<MatrixXs> Hs_tmp_;
+    
+    // Storage for CSC matrix data with proper QDLDL types
+    std::vector<QDLDL_int> csc_p_;
+    std::vector<QDLDL_int> csc_i_;
 };  
 
 KKTSystem::KKTSystem(int nx, int nu, int N, const std::vector<int>& ncs)
@@ -139,17 +142,17 @@ void KKTSystem::form_KKT_matrix(const LQRModel& model, scalar rho_dyn, scalar si
         Hs_tmp_[0].diagonal().array() += sigma;
         // Cost matrix R0 for stage 0
         ConstMatrixRef R0 = Hs_tmp_[0].topLeftCorner(nu, nu);
-        assign_dense_matrix(row_offset, row_offset, R0, KKT_mat_, update, true);
+        assign_dense_matrix(row_offset, row_offset, R0, KKT_mat_, update, true, true);
 
         // D_{u,0}^T
         if (nc > 0) {
             ConstMatrixRef Du0 = kpoint.D_con.leftCols(nu);
-            assign_dense_matrix(row_offset, col_offset, Du0.transpose(), KKT_mat_, update);
+            assign_dense_matrix(row_offset, col_offset, Du0.transpose(), KKT_mat_, update, false, true);
         }
 
         // B0
         ConstMatrixRef B0 = kpoint.E.leftCols(nu);  
-        assign_dense_matrix(row_offset, col_offset + nc, B0.transpose(), KKT_mat_, update);
+        assign_dense_matrix(row_offset, col_offset + nc, B0.transpose(), KKT_mat_, update, false, false);
 
         row_offset += nu;
         col_offset += nc;
@@ -178,13 +181,13 @@ void KKTSystem::form_KKT_matrix(const LQRModel& model, scalar rho_dyn, scalar si
         // Terminal cost matrix QN
         Hs_tmp_[N] = terminal_kpoint.H;
         Hs_tmp_[N].diagonal().array() += sigma;
-        assign_dense_matrix(row_offset, row_offset, Hs_tmp_[N], KKT_mat_, update, true);
+        assign_dense_matrix(row_offset, row_offset, Hs_tmp_[N], KKT_mat_, update, true, true);
         // -I
         assign_diagonal_matrix(row_offset, col_offset, -1.0, nx, KKT_mat_, update);
         // Terminal constraints
         if (nc > 0) {
             ConstMatrixRef DxN = terminal_kpoint.D_con;
-            assign_dense_matrix(row_offset, col_offset + nx, DxN.transpose(), KKT_mat_, update);
+            assign_dense_matrix(row_offset, col_offset + nx, DxN.transpose(), KKT_mat_, update, false, true);
         }
         row_offset += nx;
     }
@@ -298,24 +301,30 @@ void KKTSystem::form_rhs(const LQRModel& model,
 
 std::unique_ptr<CscMatrix> KKTSystem::get_KKT_csc_matrix() {
     // Ensure type compatibility at compile time
-    // static_assert(sizeof(QDLDL_int) == sizeof(Eigen::StorageIndex), 
-    //     "QDLDL_int size must match Eigen::StorageIndex size");
-    // static_assert(sizeof(QDLDL_float) == sizeof(scalar), 
-    //     "QDLDL_float size must match scalar size");
+    static_assert(sizeof(QDLDL_float) == sizeof(scalar), "QDLDL_float size must match scalar size");
 
     if (!KKT_mat_.isCompressed()) { KKT_mat_.makeCompressed(); }
     
-    // KKT_mat_triu_ = KKT_mat_.triangularView<Eigen::Upper>();
-
     auto K_csc = std::make_unique<CscMatrix>();
     
     K_csc->m     = static_cast<QDLDL_int>(KKT_mat_.rows());
     K_csc->n     = static_cast<QDLDL_int>(KKT_mat_.cols());
     K_csc->nzmax = static_cast<QDLDL_int>(KKT_mat_.nonZeros());
     
-    // Safe type-checked cast to QDLDL types
-    K_csc->p = reinterpret_cast<const QDLDL_int*>(KKT_mat_.outerIndexPtr());
-    K_csc->i = reinterpret_cast<const QDLDL_int*>(KKT_mat_.innerIndexPtr());
+    // Copy data with proper type conversion from StorageIndex to QDLDL_int
+    const auto* eigen_p = KKT_mat_.outerIndexPtr();
+    const auto* eigen_i = KKT_mat_.innerIndexPtr();  
+    csc_p_.resize(K_csc->n + 1);
+    csc_i_.resize(K_csc->nzmax);
+    for (QDLDL_int i = 0; i <= K_csc->n; ++i) {
+        csc_p_[i] = static_cast<QDLDL_int>(eigen_p[i]);
+    }
+    for (QDLDL_int i = 0; i < K_csc->nzmax; ++i) {
+        csc_i_[i] = static_cast<QDLDL_int>(eigen_i[i]);
+    }
+    K_csc->p = csc_p_.data();
+    K_csc->i = csc_i_.data();
+    
     K_csc->x = reinterpret_cast<const QDLDL_float*>(KKT_mat_.valuePtr());
     
     return K_csc;
